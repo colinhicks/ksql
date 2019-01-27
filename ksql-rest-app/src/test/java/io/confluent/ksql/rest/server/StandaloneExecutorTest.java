@@ -1,18 +1,16 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 
 package io.confluent.ksql.rest.server;
 
@@ -40,6 +38,7 @@ import io.confluent.ksql.parser.tree.QualifiedName;
 import io.confluent.ksql.parser.tree.Query;
 import io.confluent.ksql.parser.tree.SetProperty;
 import io.confluent.ksql.parser.tree.UnsetProperty;
+import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.util.KsqlConfig;
 import io.confluent.ksql.util.KsqlException;
 import io.confluent.ksql.util.PersistentQueryMetadata;
@@ -82,6 +81,8 @@ public class StandaloneExecutorTest {
   private QueryMetadata nonPeristentQueryMd;
   @Mock
   private VersionCheckerAgent versionCheckerAgent;
+  @Mock
+  private ServiceContext serviceContext;
 
   private Path queriesFile;
   private StandaloneExecutor standaloneExecutor;
@@ -90,10 +91,11 @@ public class StandaloneExecutorTest {
   public void before() throws IOException {
     queriesFile = Paths.get(TestUtils.tempFile().getPath());
 
-    when(engine.execute(any(), any(), any())).thenReturn(ImmutableList.of(queryMd));
+    when(engine.execute(any(), any(), any())).thenReturn(Optional.of(queryMd));
 
     standaloneExecutor = new StandaloneExecutor(
-        ksqlConfig, engine, queriesFile.toString(), udfLoader, false, versionCheckerAgent);
+        serviceContext, ksqlConfig, engine, queriesFile.toString(), udfLoader,
+        false, versionCheckerAgent);
   }
 
   @Test
@@ -173,31 +175,31 @@ public class StandaloneExecutorTest {
   @Test
   public void shouldRunCsStatement() {
     // Given:
-    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(
-        new PreparedStatement<>("CS",
-            new CreateStream(SOME_NAME, emptyList(), false, emptyMap()))
-    ));
+    final PreparedStatement<CreateStream> cs = new PreparedStatement<>("CS",
+        new CreateStream(SOME_NAME, emptyList(), false, emptyMap()));
+
+    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(cs));
 
     // When:
     standaloneExecutor.start();
 
     // Then:
-    verify(engine).execute("CS", ksqlConfig, emptyMap());
+    verify(engine).execute(cs, ksqlConfig, emptyMap());
   }
 
   @Test
   public void shouldRunCtStatement() {
     // Given:
-    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(
-        new PreparedStatement<>("CT",
-            new CreateTable(SOME_NAME, emptyList(), false, emptyMap()))
-    ));
+    final PreparedStatement<CreateTable> ct = new PreparedStatement<>("CT",
+        new CreateTable(SOME_NAME, emptyList(), false, emptyMap()));
+
+    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(ct));
 
     // When:
     standaloneExecutor.start();
 
     // Then:
-    verify(engine).execute("CT", ksqlConfig, emptyMap());
+    verify(engine).execute(ct, ksqlConfig, emptyMap());
   }
 
   @Test
@@ -214,7 +216,8 @@ public class StandaloneExecutorTest {
     standaloneExecutor.start();
 
     // Then:
-    verify(engine).execute(any(), any(), eq(ImmutableMap.of("name", "value")));
+    verify(engine)
+        .execute(any(), any(), eq(ImmutableMap.of("name", "value")));
   }
 
   @Test
@@ -239,48 +242,48 @@ public class StandaloneExecutorTest {
   @Test
   public void shouldRunCsasStatements() {
     // Given:
-    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(
-        new PreparedStatement<>("CSAS1",
-            new CreateStreamAsSelect(SOME_NAME, query, false, emptyMap(), Optional.empty()))
-    ));
+    final PreparedStatement<CreateStreamAsSelect> csas = new PreparedStatement<>("CSAS1",
+        new CreateStreamAsSelect(SOME_NAME, query, false, emptyMap(), Optional.empty()));
+
+    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(csas));
 
     // When:
     standaloneExecutor.start();
 
     // Then:
-    verify(engine).execute("CSAS1", ksqlConfig, emptyMap());
+    verify(engine).execute(csas, ksqlConfig, emptyMap());
   }
 
   @Test
   @SuppressWarnings("unchecked")
   public void shouldRunCtasStatements() {
     // Given:
-    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(
-        new PreparedStatement<>("CTAS",
-            new CreateTableAsSelect(SOME_NAME, query, false, emptyMap()))
-    ));
+    final PreparedStatement<CreateTableAsSelect> ctas = new PreparedStatement<>("CTAS",
+        new CreateTableAsSelect(SOME_NAME, query, false, emptyMap()));
+
+    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(ctas));
 
     // When:
     standaloneExecutor.start();
 
     // Then:
-    verify(engine).execute("CTAS", ksqlConfig, emptyMap());
+    verify(engine).execute(ctas, ksqlConfig, emptyMap());
   }
 
   @Test
   @SuppressWarnings("unchecked")
   public void shouldRunInsertIntoStatements() {
     // Given:
-    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(
-        new PreparedStatement<>("InsertInto",
-            new InsertInto(SOME_NAME, query, Optional.empty()))
-    ));
+    final PreparedStatement<InsertInto> insertInto = new PreparedStatement<>("InsertInto",
+        new InsertInto(SOME_NAME, query, Optional.empty()));
+
+    when(engine.parseStatements(anyString())).thenReturn(ImmutableList.of(insertInto));
 
     // When:
     standaloneExecutor.start();
 
     // Then:
-    verify(engine).execute("InsertInto", ksqlConfig, emptyMap());
+    verify(engine).execute(insertInto, ksqlConfig, emptyMap());
   }
 
   @Test
@@ -288,21 +291,7 @@ public class StandaloneExecutorTest {
     // Given:
     givenFileContainsAPersistentQuery();
 
-    when(engine.execute(any(), any(), any())).thenReturn(emptyList());
-
-    expectedException.expect(KsqlException.class);
-    expectedException.expectMessage("Could not build the query");
-
-    // When:
-    standaloneExecutor.start();
-  }
-
-  @Test
-  public void shouldThrowIfExecutingPersistentQueryReturnsMultiple() {
-    // Given:
-    givenFileContainsAPersistentQuery();
-
-    when(engine.execute(any(), any(), any())).thenReturn(ImmutableList.of(queryMd, queryMd));
+    when(engine.execute(any(), any(), any())).thenReturn(Optional.empty());
 
     expectedException.expect(KsqlException.class);
     expectedException.expectMessage("Could not build the query");
@@ -316,7 +305,7 @@ public class StandaloneExecutorTest {
     // Given:
     givenFileContainsAPersistentQuery();
 
-    when(engine.execute(any(), any(), any())).thenReturn(ImmutableList.of(nonPeristentQueryMd));
+    when(engine.execute(any(), any(), any())).thenReturn(Optional.of(nonPeristentQueryMd));
 
     expectedException.expect(KsqlException.class);
     expectedException.expectMessage("Could not build the query");
@@ -354,9 +343,18 @@ public class StandaloneExecutorTest {
     verify(engine).close();
   }
 
+  @Test
+  public void shouldCloseServiceContextOnStop() {
+    // When:
+    standaloneExecutor.stop();
+
+    // Then:
+    verify(serviceContext).close();
+  }
+
   private void givenExecutorWillFailOnNoQueries() {
     standaloneExecutor = new StandaloneExecutor(
-        ksqlConfig, engine, queriesFile.toString(), udfLoader, true, versionCheckerAgent);
+        serviceContext, ksqlConfig, engine, queriesFile.toString(), udfLoader, true, versionCheckerAgent);
   }
 
   private void givenFileContainsAPersistentQuery() {

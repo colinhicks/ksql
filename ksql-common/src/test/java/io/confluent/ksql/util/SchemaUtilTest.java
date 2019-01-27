@@ -1,18 +1,16 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 
 package io.confluent.ksql.util;
 
@@ -22,7 +20,6 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 
 import java.lang.reflect.Type;
@@ -575,40 +572,45 @@ public class SchemaUtilTest {
   @Test
   public void shouldResolveIntAndLongSchemaToLong() {
     assertThat(
-        SchemaUtil.resolveArithmeticType(Schema.Type.INT64, Schema.Type.INT32).type(),
+        SchemaUtil.resolveBinaryOperatorResultType(Schema.Type.INT64, Schema.Type.INT32).type(),
         equalTo(Schema.Type.INT64));
   }
 
   @Test
   public void shouldResolveIntAndIntSchemaToInt() {
     assertThat(
-        SchemaUtil.resolveArithmeticType(Schema.Type.INT32, Schema.Type.INT32).type(),
+        SchemaUtil.resolveBinaryOperatorResultType(Schema.Type.INT32, Schema.Type.INT32).type(),
         equalTo(Schema.Type.INT32));
   }
 
   @Test
   public void shouldResolveFloat64AndAnyNumberTypeToFloat() {
     assertThat(
-        SchemaUtil.resolveArithmeticType(Schema.Type.INT32, Schema.Type.FLOAT64).type(),
+        SchemaUtil.resolveBinaryOperatorResultType(Schema.Type.INT32, Schema.Type.FLOAT64).type(),
         equalTo(Schema.Type.FLOAT64));
     assertThat(
-        SchemaUtil.resolveArithmeticType(Schema.Type.FLOAT64, Schema.Type.INT64).type(),
+        SchemaUtil.resolveBinaryOperatorResultType(Schema.Type.FLOAT64, Schema.Type.INT64).type(),
         equalTo(Schema.Type.FLOAT64));
     assertThat(
-        SchemaUtil.resolveArithmeticType(Schema.Type.FLOAT32, Schema.Type.FLOAT64).type(),
+        SchemaUtil.resolveBinaryOperatorResultType(Schema.Type.FLOAT32, Schema.Type.FLOAT64).type(),
         equalTo(Schema.Type.FLOAT64));
   }
 
   @Test
   public void shouldResolveStringAndStringToString() {
     assertThat(
-        SchemaUtil.resolveArithmeticType(Schema.Type.STRING, Schema.Type.STRING).type(),
+        SchemaUtil.resolveBinaryOperatorResultType(Schema.Type.STRING, Schema.Type.STRING).type(),
         equalTo(Schema.Type.STRING));
   }
 
   @Test(expected = KsqlException.class)
   public void shouldThrowExceptionWhenResolvingStringWithAnythingElse() {
-    SchemaUtil.resolveArithmeticType(Schema.Type.STRING, Schema.Type.FLOAT64);
+    SchemaUtil.resolveBinaryOperatorResultType(Schema.Type.STRING, Schema.Type.FLOAT64);
+  }
+
+  @Test(expected = KsqlException.class)
+  public void shouldThrowExceptionWhenResolvingUnkonwnType() {
+    SchemaUtil.resolveBinaryOperatorResultType(Schema.Type.BOOLEAN, Schema.Type.FLOAT64);
   }
 
   @Test

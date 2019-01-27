@@ -1,17 +1,15 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.ksql.rest.server.computation;
@@ -37,14 +35,15 @@ import io.confluent.ksql.rest.entity.KsqlRequest;
 import io.confluent.ksql.rest.server.StatementParser;
 import io.confluent.ksql.rest.server.computation.CommandId.Action;
 import io.confluent.ksql.rest.server.computation.CommandId.Type;
-import io.confluent.ksql.rest.server.mock.MockKafkaTopicClient;
 import io.confluent.ksql.rest.server.resources.KsqlResource;
-import io.confluent.ksql.schema.registry.MockSchemaRegistryClientFactory;
 import io.confluent.ksql.serde.KsqlTopicSerDe;
-import io.confluent.ksql.util.FakeKafkaClientSupplier;
+import io.confluent.ksql.services.FakeKafkaTopicClient;
+import io.confluent.ksql.services.ServiceContext;
+import io.confluent.ksql.services.TestServiceContext;
 import io.confluent.ksql.util.KsqlConfig;
 import io.confluent.ksql.util.PersistentQueryMetadata;
 import io.confluent.ksql.util.timestamp.TimestampExtractionPolicy;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -61,6 +60,8 @@ import org.easymock.EasyMock;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 public class RecoveryTest {
@@ -70,23 +71,28 @@ public class RecoveryTest {
       )
   );
   private final List<QueuedCommand> commands = new LinkedList<>();
+  private final FakeKafkaTopicClient topicClient = new FakeKafkaTopicClient();
+  private final ServiceContext serviceContext = TestServiceContext.create(topicClient);
   private final KsqlServer server1 = new KsqlServer(commands);
   private final KsqlServer server2 = new KsqlServer(commands);
+
+  @After
+  public void tearDown() {
+    server1.close();
+    server2.close();
+    serviceContext.close();
+  }
 
   private KsqlEngine createKsqlEngine() {
     final KsqlEngineMetrics engineMetrics = EasyMock.niceMock(KsqlEngineMetrics.class);
     EasyMock.replay(engineMetrics);
     return KsqlEngineTestUtil.createKsqlEngine(
-        new MockKafkaTopicClient(),
-        new MockSchemaRegistryClientFactory()::get,
-        new FakeKafkaClientSupplier(),
+        serviceContext,
         new MetaStoreImpl(new InternalFunctionRegistry()),
-        ksqlConfig,
-        new FakeKafkaClientSupplier().getAdminClient(ksqlConfig.getKsqlAdminClientConfigProps()),
         engineMetrics);
   }
 
-  private static class FakeCommandQueue implements ReplayableCommandQueue {
+  private static class FakeCommandQueue implements CommandQueue {
     private final List<QueuedCommand> commandLog;
     private final CommandIdAssigner commandIdAssigner;
     private int offset;
@@ -105,6 +111,7 @@ public class RecoveryTest {
         final KsqlConfig ksqlConfig,
         final Map<String, Object> overwriteProperties) {
       final CommandId commandId = commandIdAssigner.getCommandId(statement);
+      final long commandSequenceNumber = commandLog.size();
       commandLog.add(
           new QueuedCommand(
               commandId,
@@ -113,7 +120,7 @@ public class RecoveryTest {
                   Collections.emptyMap(),
                   ksqlConfig.getAllConfigPropsWithSecretsObfuscated()),
               Optional.empty()));
-      return new QueuedCommandStatus(commandId);
+      return new QueuedCommandStatus(commandSequenceNumber, new CommandStatusFuture(commandId));
     }
 
     @Override
@@ -128,6 +135,10 @@ public class RecoveryTest {
       final List<QueuedCommand> restoreCommands = ImmutableList.copyOf(commandLog);
       this.offset = commandLog.size();
       return restoreCommands;
+    }
+
+    @Override
+    public void ensureConsumedPast(final long seqNum, final Duration timeout) {
     }
 
     @Override
@@ -152,8 +163,9 @@ public class RecoveryTest {
       this.ksqlResource = new KsqlResource(
           ksqlConfig,
           ksqlEngine,
+          serviceContext,
           fakeCommandQueue,
-          0,
+          Duration.ofMillis(0),
           ()->{}
       );
       this.statementExecutor = new StatementExecutor(
@@ -163,7 +175,10 @@ public class RecoveryTest {
       this.commandRunner = new CommandRunner(
           statementExecutor,
           fakeCommandQueue,
-          1
+          ksqlConfig,
+          ksqlEngine,
+          1,
+          serviceContext
       );
     }
 
@@ -178,10 +193,14 @@ public class RecoveryTest {
     void submitCommands(final String ...statements) {
       for (final String statement : statements) {
         final Response response = ksqlResource.handleKsqlStatements(
-            new KsqlRequest(statement, Collections.emptyMap()));
+            new KsqlRequest(statement, Collections.emptyMap(), null));
         assertThat(response.getStatus(), equalTo(200));
         executeCommands();
       }
+    }
+
+    void close() {
+      ksqlEngine.close();
     }
   }
 
@@ -348,7 +367,7 @@ public class RecoveryTest {
     protected boolean matchesSafely(final MetaStore other, final Description description) {
       if (!test(
           equalTo(sourceMatchers.keySet()),
-          other.getAllStructuredDataSourceNames(),
+          other.getAllStructuredDataSources().keySet(),
           description,
           "source set mismatch: ")) {
         return false;
@@ -452,7 +471,7 @@ public class RecoveryTest {
     return new PersistentQueryMetadataMatcher(metadata);
   }
 
-  private Map<QueryId, PersistentQueryMetadata> queriesById(
+  private static Map<QueryId, PersistentQueryMetadata> queriesById(
       final Collection<PersistentQueryMetadata> queries) {
     return queries.stream().collect(
         Collectors.toMap(PersistentQueryMetadata::getQueryId, q -> q)
@@ -479,6 +498,11 @@ public class RecoveryTest {
     assertThat(queries.keySet(), equalTo(recoveredQueries.keySet()));
     queries.forEach(
         (queryId, query) -> assertThat(query, sameQuery(recoveredQueries.get(queryId))));
+  }
+
+  @Before
+  public void setUp() {
+    topicClient.preconditionTopicExists("A");
   }
 
   @Test
@@ -554,6 +578,8 @@ public class RecoveryTest {
 
   @Test
   public void shouldRecoverLogWithTerminateAfterDrop() {
+    topicClient.preconditionTopicExists("B");
+
     server1.submitCommands(
         "CREATE STREAM A (COLUMN STRING) WITH (KAFKA_TOPIC='A', VALUE_FORMAT='JSON');",
         "CREATE STREAM B (COLUMN STRING) WITH (KAFKA_TOPIC='B', VALUE_FORMAT='JSON');"
@@ -591,7 +617,7 @@ public class RecoveryTest {
     final KsqlServer server = new KsqlServer(commands);
     server.recover();
     assertThat(
-        server.ksqlEngine.getMetaStore().getAllStructuredDataSourceNames(),
+        server.ksqlEngine.getMetaStore().getAllStructuredDataSources().keySet(),
         contains("A", "B"));
     commands.add(
         new QueuedCommand(
@@ -602,7 +628,7 @@ public class RecoveryTest {
     final KsqlServer recovered = new KsqlServer(commands);
     recovered.recover();
     assertThat(
-        recovered.ksqlEngine.getMetaStore().getAllStructuredDataSourceNames(),
+        recovered.ksqlEngine.getMetaStore().getAllStructuredDataSources().keySet(),
         contains("A"));
   }
 }

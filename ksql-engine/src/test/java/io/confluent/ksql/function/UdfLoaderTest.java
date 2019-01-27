@@ -1,22 +1,20 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.ksql.function;
 
-import static io.confluent.ksql.util.KsqlConfig.KSQ_FUNCTIONS_PROPERTY_PREFIX;
+import static io.confluent.ksql.util.KsqlConfig.KSQL_FUNCTIONS_PROPERTY_PREFIX;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.not;
@@ -177,13 +175,19 @@ public class UdfLoaderTest {
   public void shouldSupportUdfParameterAnnotation() {
     final UdfFactory substring = metaStore.getUdfFactory("somefunction");
     final KsqlFunction function = substring.getFunction(
-        ImmutableList.of(Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA));
+        ImmutableList.of(
+            Schema.OPTIONAL_STRING_SCHEMA,
+            Schema.OPTIONAL_STRING_SCHEMA,
+            Schema.OPTIONAL_STRING_SCHEMA));
+
     final List<Schema> arguments = function.getArguments();
 
     assertThat(arguments.get(0).name(), is("justValue"));
     assertThat(arguments.get(0).doc(), is(""));
     assertThat(arguments.get(1).name(), is("valueAndDescription"));
     assertThat(arguments.get(1).doc(), is("Some description"));
+    assertThat(arguments.get(2).name(), is("noValue"));
+    assertThat(arguments.get(2).doc(), is(""));
   }
 
   @Test
@@ -194,17 +198,6 @@ public class UdfLoaderTest {
         Arrays.asList(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA))
         .newInstance(ksqlConfig);
     assertThat(getActualUdfClassLoader(kudf), equalTo(parentClassLoader));
-  }
-
-  private ClassLoader getActualUdfClassLoader(final Kudf udf)
-      throws NoSuchFieldException, IllegalAccessException {
-    final Field actualUdf = PluggableUdf.class.getDeclaredField("actualUdf");
-    actualUdf.setAccessible(true);
-    try {
-      return actualUdf.get(udf).getClass().getClassLoader();
-    } finally{
-      actualUdf.setAccessible(false);
-    }
   }
 
   @Test
@@ -287,8 +280,8 @@ public class UdfLoaderTest {
     // Given:
     final KsqlConfig ksqlConfig = new KsqlConfig(ImmutableMap.of(
         KsqlConfig.KSQL_SERVICE_ID_CONFIG, "should not be passed",
-        KSQ_FUNCTIONS_PROPERTY_PREFIX + "configurableudf.some.setting", "foo-bar",
-        KSQ_FUNCTIONS_PROPERTY_PREFIX + "_global_.expected-param", "expected-value"
+        KSQL_FUNCTIONS_PROPERTY_PREFIX + "configurableudf.some.setting", "foo-bar",
+        KSQL_FUNCTIONS_PROPERTY_PREFIX + "_global_.expected-param", "expected-value"
     ));
 
     final KsqlFunction udf = metaStore.getUdfFactory("ConfigurableUdf")
@@ -300,9 +293,9 @@ public class UdfLoaderTest {
     // Then:
     assertThat(PASSED_CONFIG, is(notNullValue()));
     assertThat(PASSED_CONFIG.keySet(), not(hasItem(KsqlConfig.KSQL_SERVICE_ID_CONFIG)));
-    assertThat(PASSED_CONFIG.get(KSQ_FUNCTIONS_PROPERTY_PREFIX + "configurableudf.some.setting"),
+    assertThat(PASSED_CONFIG.get(KSQL_FUNCTIONS_PROPERTY_PREFIX + "configurableudf.some.setting"),
         is("foo-bar"));
-    assertThat(PASSED_CONFIG.get(KSQ_FUNCTIONS_PROPERTY_PREFIX + "_global_.expected-param"),
+    assertThat(PASSED_CONFIG.get(KSQL_FUNCTIONS_PROPERTY_PREFIX + "_global_.expected-param"),
         is("expected-value"));
   }
 
@@ -321,7 +314,18 @@ public class UdfLoaderTest {
         loadCustomerUdfs);
   }
 
-  @SuppressWarnings("unused") // Invoked via reflection.
+  private static ClassLoader getActualUdfClassLoader(final Kudf udf)
+      throws NoSuchFieldException, IllegalAccessException {
+    final Field actualUdf = PluggableUdf.class.getDeclaredField("actualUdf");
+    actualUdf.setAccessible(true);
+    try {
+      return actualUdf.get(udf).getClass().getClassLoader();
+    } finally{
+      actualUdf.setAccessible(false);
+    }
+  }
+
+  @SuppressWarnings({"unused", "MethodMayBeStatic"}) // Invoked via reflection in test.
   public static class UdfWithMissingDescriptionAnnotation {
     @Udf(description = "This invalid UDF is here to test that the loader does not blow up if badly"
         + " formed UDFs are in the class path.")
@@ -332,7 +336,7 @@ public class UdfLoaderTest {
 
   private static Map<String, ?> PASSED_CONFIG = null;
 
-  @SuppressWarnings("unused") // Invoked via reflection in test.
+  @SuppressWarnings({"unused", "MethodMayBeStatic"}) // Invoked via reflection in test.
   @UdfDescription(
       name = "ConfigurableUdf",
       description = "A test-only UDF for testing configure() is called")
@@ -348,16 +352,16 @@ public class UdfLoaderTest {
     }
   }
 
-  @SuppressWarnings("unused") // Invoked via reflection in test.
+  @SuppressWarnings({"unused", "MethodMayBeStatic"}) // Invoked via reflection in test.
   @UdfDescription(
       name = "SomeFunction",
       description = "A test-only UDF for testing configure() is called")
   public static class SomeFunctionUdf {
     @Udf
     public int foo(
-        @UdfParameter("justValue") final String v1,
-        @UdfParameter(value = "valueAndDescription",
-            description = "Some description") final String v2) {
+        @UdfParameter("justValue") final String v0,
+        @UdfParameter(value = "valueAndDescription", description = "Some description") final String v1,
+        @UdfParameter final String noValue) {
       return 0;
     }
   }

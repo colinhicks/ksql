@@ -1,18 +1,16 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 
 package io.confluent.ksql.parser;
 
@@ -45,6 +43,7 @@ import io.confluent.ksql.parser.tree.CreateStreamAsSelect;
 import io.confluent.ksql.parser.tree.CreateTable;
 import io.confluent.ksql.parser.tree.DropStream;
 import io.confluent.ksql.parser.tree.DropTable;
+import io.confluent.ksql.parser.tree.Expression;
 import io.confluent.ksql.parser.tree.FunctionCall;
 import io.confluent.ksql.parser.tree.InsertInto;
 import io.confluent.ksql.parser.tree.IntegerLiteral;
@@ -59,6 +58,7 @@ import io.confluent.ksql.parser.tree.LongLiteral;
 import io.confluent.ksql.parser.tree.Query;
 import io.confluent.ksql.parser.tree.QuerySpecification;
 import io.confluent.ksql.parser.tree.RegisterTopic;
+import io.confluent.ksql.parser.tree.SearchedCaseExpression;
 import io.confluent.ksql.parser.tree.SetProperty;
 import io.confluent.ksql.parser.tree.SingleColumn;
 import io.confluent.ksql.parser.tree.Statement;
@@ -1211,4 +1211,73 @@ public class KsqlParserTest {
     assertThat(statements, hasSize(1));
     assertThat(statements.get(0).getStatement(), is(instanceOf(ListStreams.class)));
   }
+
+  @Test
+  public void shouldParseMultiLineWithInlineComments() {
+    final String statementString =
+        "SHOW -- inline comment\n"
+        + "STREAMS;";
+
+    final List<PreparedStatement<?>> statements =  KSQL_PARSER.buildAst(statementString, metaStore);
+
+    assertThat(statements, hasSize(1));
+    assertThat(statements.get(0).getStatement(), is(instanceOf(ListStreams.class)));
+  }
+
+  @Test
+  public void shouldParseMultiLineWithInlineBracketedComments() {
+    final String statementString =
+        "SHOW /* inline\n"
+            + "comment */\n"
+            + "STREAMS;";
+
+    final List<PreparedStatement<?>> statements =  KSQL_PARSER.buildAst(statementString, metaStore);
+
+    assertThat(statements, hasSize(1));
+    assertThat(statements.get(0).getStatement(), is(instanceOf(ListStreams.class)));
+  }
+
+  @Test
+  public void shouldBuildSearchedCaseStatement() {
+    // Given:
+    final String statementString =
+        "CREATE STREAM S AS SELECT CASE WHEN orderunits < 10 THEN 'small' WHEN orderunits < 100 THEN 'medium' ELSE 'large' END FROM orders;";
+
+    // When:
+    final Statement statement = KSQL_PARSER.buildAst(statementString, metaStore).get(0)
+        .getStatement();
+
+    // Then:
+    final SearchedCaseExpression searchedCaseExpression = getSearchedCaseExpressionFromCsas(statement);
+    assertThat(searchedCaseExpression.getWhenClauses().size(), equalTo(2));
+    assertThat(searchedCaseExpression.getWhenClauses().get(0).getOperand().toString(), equalTo("(ORDERS.ORDERUNITS < 10)"));
+    assertThat(searchedCaseExpression.getWhenClauses().get(0).getResult().toString(), equalTo("'small'"));
+    assertThat(searchedCaseExpression.getWhenClauses().get(1).getOperand().toString(), equalTo("(ORDERS.ORDERUNITS < 100)"));
+    assertThat(searchedCaseExpression.getWhenClauses().get(1).getResult().toString(), equalTo("'medium'"));
+    assertTrue(searchedCaseExpression.getDefaultValue().isPresent());
+    assertThat(searchedCaseExpression.getDefaultValue().get().toString(), equalTo("'large'"));
+  }
+
+  @Test
+  public void shouldBuildSearchedCaseWithoutDefaultStatement() {
+    // Given:
+    final String statementString =
+        "CREATE STREAM S AS SELECT CASE WHEN orderunits < 10 THEN 'small' WHEN orderunits < 100 THEN 'medium' END FROM orders;";
+
+    // When:
+    final Statement statement = KSQL_PARSER.buildAst(statementString, metaStore).get(0)
+        .getStatement();
+
+    // Then:
+    final SearchedCaseExpression searchedCaseExpression = getSearchedCaseExpressionFromCsas(statement);
+    assertThat(searchedCaseExpression.getDefaultValue().isPresent(), equalTo(false));
+  }
+
+  private static SearchedCaseExpression getSearchedCaseExpressionFromCsas(final Statement statement) {
+    final Query query = ((CreateStreamAsSelect) statement).getQuery();
+    final QuerySpecification querySpecification = (QuerySpecification) query.getQueryBody();
+    final Expression caseExpression = ((SingleColumn) querySpecification.getSelect().getSelectItems().get(0)).getExpression();
+    return (SearchedCaseExpression) caseExpression;
+  }
+
 }

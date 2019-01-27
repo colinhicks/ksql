@@ -56,7 +56,13 @@ Use the following syntax to declare nested data:
 The ``STRUCT`` type requires you to specify a list of fields. For each field, you
 specify the field name and field type. The field type can be any of the
 supported KSQL types, including the complex types ``MAP``, ``ARRAY``, and
-``STRUCT``. Here's an example CREATE STREAM statement that uses a ``STRUCT`` to
+``STRUCT``.
+
+.. note::
+    
+    ``Properties`` is not a valid field name.
+
+Here's an example CREATE STREAM statement that uses a ``STRUCT`` to
 encapsulate a street address and a postal code:
 
 .. code:: sql
@@ -173,6 +179,9 @@ KSQL statements
        -  In the CLI you must use a backslash (``\``) to indicate
           continuation of a statement on the next line.
        -  Do not use ``\`` for multi-line statements in ``.sql`` files.
+    - The hyphen character, ``-``, isn't supported in names for streams, tables,
+      topics, and columns.
+    - Don't use quotes around stream names or table names when you CREATE them.
 
 .. _create-stream:
 
@@ -236,13 +245,13 @@ The WITH clause supports the following properties:
 | TIMESTAMP_FORMAT        | Used in conjunction with TIMESTAMP. If not set will assume that the timestamp field is a   |
 |                         | long. If it is set, then the TIMESTAMP field must be of type varchar and have a format     |
 |                         | that can be parsed with the java ``DateTimeFormatter``. If your timestamp format has       |
-|                         | characters requiring single quotes, you can escape them with '', for example:              |
-|                         | 'yyyy-MM-dd''T''HH:mm:ssX'                                                                 |
+|                         | characters requiring single quotes, you can escape them with successive single quotes,     |
+|                         | ``''``, for example: ``'yyyy-MM-dd''T''HH:mm:ssX'``.                                       |
 +-------------------------+--------------------------------------------------------------------------------------------+
 | WINDOW_TYPE             | By default, the topic is assumed to contain non-windowed data. If the data is windowed,    |
 |                         | i.e. was created using KSQL using a query that contains a ``WINDOW`` clause, then the      |
 |                         | ``WINDOW_TYPE`` property can be used to provide the window type. Valid values are          |
-|                         | ``SESSION``, ``HOPPING`, and ``TUMBLING``.                                                  |
+|                         | ``SESSION``, ``HOPPING`, and ``TUMBLING``.                                                 |
 +-------------------------+--------------------------------------------------------------------------------------------+
 
 
@@ -339,13 +348,13 @@ The WITH clause supports the following properties:
 | TIMESTAMP_FORMAT        | Used in conjunction with TIMESTAMP. If not set will assume that the timestamp field is a   |
 |                         | long. If it is set, then the TIMESTAMP field must be of type varchar and have a format     |
 |                         | that can be parsed with the java ``DateTimeFormatter``. If your timestamp format has       |
-|                         | characters requiring single quotes, you can escape them with '', for example:              |
-|                         | 'yyyy-MM-dd''T''HH:mm:ssX'                                                                 |
+|                         | characters requiring single quotes, you can escape them with two successive single quotes, |
+|                         | ``''``, for example: ``'yyyy-MM-dd''T''HH:mm:ssX'``.                                       |
 +-------------------------+--------------------------------------------------------------------------------------------+
 | WINDOW_TYPE             | By default, the topic is assumed to contain non-windowed data. If the data is windowed,    |
 |                         | i.e. was created using KSQL using a query that contains a ``WINDOW`` clause, then the      |
 |                         | ``WINDOW_TYPE`` property can be used to provide the window type. Valid values are          |
-|                         | ``SESSION``, ``HOPPING`, and ``TUMBLING``.                                                  |
+|                         | ``SESSION``, ``HOPPING`, and ``TUMBLING``.                                                 |
 +-------------------------+--------------------------------------------------------------------------------------------+
 
 .. include:: ../includes/ksql-includes.rst
@@ -395,7 +404,8 @@ continuously write the result of the SELECT query into the stream and
 its corresponding topic.
 
 If the PARTITION BY clause is present, then the resulting stream will
-have the specified column as its key.
+have the specified column as its key. For more information, see
+:ref:`partition-data-to-enable-joins`.
 
 For joins, the key of the resulting stream will be the value from the column
 from the left stream that was used in the join criteria. This column will be
@@ -404,6 +414,8 @@ columns.
 
 For stream-table joins, the column used in the join criteria for the table
 must be the table key.
+
+For more information, see :ref:`join-streams-and-tables`.
 
 The WITH clause for the result supports the following properties:
 
@@ -441,8 +453,8 @@ The WITH clause for the result supports the following properties:
 | TIMESTAMP_FORMAT        | Used in conjunction with TIMESTAMP. If not set will assume that the timestamp field is a             |
 |                         | long. If it is set, then the TIMESTAMP field must be of type varchar and have a format               |
 |                         | that can be parsed with the java ``DateTimeFormatter``. If your timestamp format has                 |
-|                         | characters requiring single quotes, you can escape them with '', for example:                        |
-|                         | 'yyyy-MM-dd''T''HH:mm:ssX'                                                                           |
+|                         | characters requiring single quotes, you can escape them with two successive single quotes,           |
+|                         | ``''``, for example: ``'yyyy-MM-dd''T''HH:mm:ssX'``.                                                 |
 +-------------------------+------------------------------------------------------------------------------------------------------+
 
 .. include:: ../includes/ksql-includes.rst
@@ -481,8 +493,10 @@ from the left table that was used in the join criteria. This column will be
 registered as the key of the resulting table if included in the selected
 columns.
 
-For joins, the columns used in the join criteria must be the keys of the
-tables being joined.
+For joins, the columns used in the join criteria must be the keys of the tables
+being joined.
+
+For more information, see :ref:`join-streams-and-tables`.
 
 The WITH clause supports the following properties:
 
@@ -522,8 +536,8 @@ The WITH clause supports the following properties:
 | TIMESTAMP_FORMAT        | Used in conjunction with TIMESTAMP. If not set will assume that the timestamp field is a             |
 |                         | long. If it is set, then the TIMESTAMP field must be of type varchar and have a format               |
 |                         | that can be parsed with the java ``DateTimeFormatter``. If your timestamp format has                 |
-|                         | characters requiring single quotes, you can escape them with '', for example:                        |
-|                         | 'yyyy-MM-dd''T''HH:mm:ssX'                                                                           |
+|                         | characters requiring single quotes, you can escape them with two successive single quotes,           |
+|                         | ``''``, for example: ``'yyyy-MM-dd''T''HH:mm:ssX'``.                                                 |
 +-------------------------+------------------------------------------------------------------------------------------------------+
 
 .. include:: ../includes/ksql-includes.rst
@@ -903,6 +917,8 @@ the following WINDOW types:
          WINDOW SESSION (20 SECONDS)
          GROUP BY item_id;
 
+For more information, see :ref:`windows_in_ksql_queries`.
+
 CAST
 ~~~~
 
@@ -923,6 +939,38 @@ example of converting a BIGINT into a VARCHAR type:
       WINDOW TUMBLING (SIZE 20 SECONDS)
       GROUP BY page_id;
 
+CASE
+~~~~
+
+ **Synopsis**
+
+ .. code:: sql
+
+     CASE
+        WHEN condition THEN result
+        [ WHEN ... THEN ... ]
+        …
+        [ WHEN … THEN … ]
+        [ ELSE result ]
+     END
+
+ Currently, KSQL supports a ``searched`` form of CASE expression. In this form, CASE evaluates
+each boolean ``condition`` in WHEN caluses, from left to right. If a condition is true, then it returns the
+corresponding result. If none of the conditions are true, it returns the result from the ELSE clause.
+If none of the conditions are true and there is no ELSE clause, it returns null.
+ The schema for all results should be the same, otherwise, KSQL will reject the statement.
+ Here is an example of CASE expression:
+
+ .. code:: sql
+
+     SELECT
+      CASE
+        WHEN orderunits < 2.0 THEN 'small'
+        WHEN orderunits < 4.0 THEN 'medium'
+        ELSE 'large'
+      END AS case_result
+     FROM orders;
+
 LIKE
 ~~~~
 
@@ -942,6 +990,27 @@ Example:
     SELECT user_id
       FROM users
       WHERE user_id LIKE 'santa%';
+
+BETWEEN
+~~~~~~~
+
+**Synopsis**
+
+.. code:: sql
+
+    WHERE expression [NOT] BETWEEN start_expression AND end_expression;
+
+The BETWEEN operator is used to indicate that a certain value must lie within
+a specified range, inclusive of boundaries. Currently, KSQL supports any expression
+that resolves to a numeric or string value for comparison.
+
+Example:
+
+.. code:: sql
+
+  SELECT event
+    FROM events
+    WHERE event_id BETWEEN 10 AND 20
 
 SHOW FUNCTIONS
 --------------
@@ -1081,6 +1150,19 @@ The explanation for each operator includes a supporting example based on the fol
 
   SELECT FIRST_NAME + LAST_NAME AS FULL_NAME FROM USERS;
 
+- You can use the ``+`` operator for multi-part concatenation, for example:
+
+.. code:: sql
+
+    SELECT TIMESTAMPTOSTRING(ROWTIME, 'yyyy-MM-dd HH:mm:ss') + \
+            ': :heavy_exclamation_mark: On ' + \
+            HOST + \
+            ' there were ' + \
+            CAST(INVALID_LOGIN_COUNT AS VARCHAR) + \
+            ' attempts in the last minute (threshold is >=4)' \
+    FROM INVALID_USERS_LOGINS_PER_HOST \
+    WHERE INVALID_LOGIN_COUNT>=4;
+
 - Source Dereference (``.``) The source dereference operator can be used to specify columns
   by dereferencing the source stream or table.
 
@@ -1112,7 +1194,6 @@ The explanation for each operator includes a supporting example based on the fol
 
    SELECT orders.address->street, o.address->zip FROM orders o;
 
-
 .. _functions:
 
 ================
@@ -1134,8 +1215,9 @@ Scalar functions
 | DATETOSTRING           |  ``DATETOSTRING(START_DATE, 'yyyy-MM-dd')``                               | Converts an integer representation of a date into |
 |                        |                                                                           | a string representing the date in                 |
 |                        |                                                                           | the given format. Single quotes in the            |
-|                        |                                                                           | timestamp format can be escaped with '', for      |
-|                        |                                                                           | example: 'yyyy-MM-dd''T'''.                       |
+|                        |                                                                           | timestamp format can be escaped with two          |
+|                        |                                                                           | successive single quotes, ``''``, for example:    |
+|                        |                                                                           | ``'yyyy-MM-dd''T'''``.                            |
 |                        |                                                                           | The integer represents days since epoch           |
 |                        |                                                                           | matching the encoding used by Kafka Connect dates.|
 +------------------------+---------------------------------------------------------------------------+---------------------------------------------------+
@@ -1160,6 +1242,11 @@ Scalar functions
 |                        |                                                                           | points, both specified in decimal degrees. An     |
 |                        |                                                                           | optional final parameter specifies ``KM``         |
 |                        |                                                                           | (the default) or ``miles``.                       |
++------------------------+---------------------------------------------------------------------------+---------------------------------------------------+
+| IFNULL                 |  ``IFNULL(col1, retval)``                                                 | If the provided VARCHAR is NULL, return           |
+|                        |                                                                           | ``retval``, otherwise, return the value. Only     |
+|                        |                                                                           | VARCHAR values are supported for the input. The   |
+|                        |                                                                           | return value must be a VARCHAR.                   |
 +------------------------+---------------------------------------------------------------------------+---------------------------------------------------+
 | LCASE                  |  ``LCASE(col1)``                                                          | Convert a string to lowercase.                    |
 +------------------------+---------------------------------------------------------------------------+---------------------------------------------------+
@@ -1208,17 +1295,31 @@ Scalar functions
 +------------------------+---------------------------------------------------------------------------+---------------------------------------------------+
 | ROUND                  |  ``ROUND(col1)``                                                          | Round a value to the nearest BIGINT value.        |
 +------------------------+---------------------------------------------------------------------------+---------------------------------------------------+
+| SPLIT                  |  ``SPLIT(col1, delimiter)``                                               | Splits a string into an array of substrings based |
+|                        |                                                                           | on a delimiter. If the delimiter is not found,    |
+|                        |                                                                           | then the original string is returned as the only  |
+|                        |                                                                           | element in the array. If the delimiter is empty,  |
+|                        |                                                                           | then all characters in the string are split.      |
+|                        |                                                                           | If either, string or delimiter, are NULL, then a  |
+|                        |                                                                           | NULL value is returned.                           |
+|                        |                                                                           |                                                   |
+|                        |                                                                           | If the delimiter is found at the beginning or end |
+|                        |                                                                           | of the string, or there are contiguous delimiters,|
+|                        |                                                                           | then an empty space is added to the array.        |
++------------------------+---------------------------------------------------------------------------+---------------------------------------------------+
 | STRINGTODATE           |  ``STRINGTODATE(col1, 'yyyy-MM-dd')``                                     | Converts a string representation of a date in the |
 |                        |                                                                           | given format into an integer representing days    |
 |                        |                                                                           | since epoch. Single quotes in the timestamp       |
-|                        |                                                                           | format can be escaped with '', for example:       |
-|                        |                                                                           | 'yyyy-MM-dd''T'''.                                |
+|                        |                                                                           | format can be escaped with two successive single  |
+|                        |                                                                           | quotes, ``''``, for example:                      |
+|                        |                                                                           | ``'yyyy-MM-dd''T'''``.                            |
 +------------------------+---------------------------------------------------------------------------+---------------------------------------------------+
 | STRINGTOTIMESTAMP      |  ``STRINGTOTIMESTAMP(col1, 'yyyy-MM-dd HH:mm:ss.SSS' [, TIMEZONE])``      | Converts a string value in the given              |
 |                        |                                                                           | format into the BIGINT value                      |
 |                        |                                                                           | that represents the millisecond timestamp. Single |
 |                        |                                                                           | quotes in the timestamp format can be escaped with|
-|                        |                                                                           | '', for example: 'yyyy-MM-dd''T''HH:mm:ssX'.      |
+|                        |                                                                           | two successive single quotes, ``''``, for         |
+|                        |                                                                           | example: ``'yyyy-MM-dd''T''HH:mm:ssX'``.          |
 |                        |                                                                           | TIMEZONE is an optional parameter and it is a     |
 |                        |                                                                           | java.util.TimeZone ID format, for example: "UTC", |
 |                        |                                                                           | "America/Los_Angeles", "PDT", "Europe/London"     |
@@ -1249,8 +1350,9 @@ Scalar functions
 | TIMESTAMPTOSTRING      |  ``TIMESTAMPTOSTRING(ROWTIME, 'yyyy-MM-dd HH:mm:ss.SSS' [, TIMEZONE])``   | Converts a BIGINT millisecond timestamp value into|
 |                        |                                                                           | the string representation of the timestamp in     |
 |                        |                                                                           | the given format. Single quotes in the            |
-|                        |                                                                           | timestamp format can be escaped with '', for      |
-|                        |                                                                           | example: 'yyyy-MM-dd''T''HH:mm:ssX'.              |
+|                        |                                                                           | timestamp format can be escaped with two          |
+|                        |                                                                           | successive single quotes, ``''``, for example:    |
+|                        |                                                                           | ``'yyyy-MM-dd''T''HH:mm:ssX'``.                   |
 |                        |                                                                           | TIMEZONE is an optional parameter and it is a     |
 |                        |                                                                           | java.util.TimeZone ID format, for example: "UTC", |
 |                        |                                                                           | "America/Los_Angeles", "PDT", "Europe/London"     |
@@ -1267,7 +1369,7 @@ Scalar functions
 Aggregate functions
 ===================
 
-+------------------------+---------------------------+----------------------------------------------------------------------------------+
++------------------------+---------------------------+------------+---------------------------------------------------------------------+
 | Function               | Example                   | Input Type | Description                                                         |
 +========================+===========================+============+=====================================================================+
 | COLLECT_LIST           | ``COLLECT_LIST(col1)``    | Stream,    | Return an array containing all the values of ``col1`` from each     |
@@ -1296,8 +1398,10 @@ Aggregate functions
 |                        |                           |            | late-arriving record, then the records from the second window in    |
 |                        |                           |            | the order they were originally processed.                           |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
-| COUNT                  | ``COUNT(col1)``           | Stream,    | Count the number of rows                                            |
-|                        |                           | Table      |                                                                     |
+| COUNT                  | ``COUNT(col1)``,          | Stream,    | Count the number of rows. When ``col1`` is specified, the count     |
+|                        | ``COUNT(*)``              | Table      | returned will be the number of rows where ``col1`` is non-null.     |
+|                        |                           |            | When ``*`` is specified, the count returned will be the total       |
+|                        |                           |            | number of rows.                                                     |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
 | HISTOGRAM              | ``HISTOGRAM(col1)``       | Stream,    | Return a map containing the distinct String values of ``col1``      |
 |                        |                           | Table      | mapped to the number of times each one occurs for the given window. |
@@ -1311,16 +1415,20 @@ Aggregate functions
 |                        |                           |            | late-arriving record, then the records from the second window in    |
 |                        |                           |            | the order they were originally processed.                           |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
-| MAX                    | ``MAX(col1)``             | Stream     | Return the maximum value for a given column and window              |
+| MAX                    | ``MAX(col1)``             | Stream     | Return the maximum value for a given column and window.             |
+|                        |                           |            | Note: rows where ``col1`` is null will be ignored.                  |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
-| MIN                    | ``MIN(col1)``             | Stream     | Return the minimum value for a given column and window              |
+| MIN                    | ``MIN(col1)``             | Stream     | Return the minimum value for a given column and window.             |
+|                        |                           |            | Note: rows where ``col1`` is null will be ignored.                  |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
 | SUM                    | ``SUM(col1)``             | Stream,    | Sums the column values                                              |
-|                        |                           | Table      |                                                                     |
+|                        |                           | Table      | Note: rows where ``col1`` is null will be ignored.                  |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
 | TOPK                   | ``TOPK(col1, k)``         | Stream     | Return the Top *K* values for the given column and window           |
+|                        |                           |            | Note: rows where ``col1`` is null will be ignored.                  |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
 | TOPKDISTINCT           | ``TOPKDISTINCT(col1, k)`` | Stream     | Return the distinct Top *K* values for the given column and window  |
+|                        |                           |            | Note: rows where ``col1`` is null will be ignored.                  |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
 | WindowStart            | ``WindowStart()``         | Stream     | Extract the start time of the current window, in milliseconds.      |
 |                        |                           | Table      | If the query is not windowed the function will return null.         |
@@ -1328,6 +1436,8 @@ Aggregate functions
 | WindowEnd              | ``WindowEnd()``           | Stream     | Extract the end time of the current window, in milliseconds.        |
 |                        |                           | Table      | If the query is not windowed the function will return null.         |
 +------------------------+---------------------------+------------+---------------------------------------------------------------------+
+
+For more information, see :ref:`aggregate-streaming-data-with-ksql`.
 
 .. _ksql_key_requirements:
 
@@ -1352,6 +1462,11 @@ The ``KEY`` property is:
 
 - Required for tables.
 - Optional for streams. Here, KSQL uses it as an optimization hint to determine if repartitioning can be avoided when performing aggregations and joins.
+  
+  .. important::
+     Don't set the KEY property, unless you have validated that your stream doesn't need to be re-partitioned for future joins.
+     If you set the KEY property, you will need to re-partition explicitly if your record key doesn't meet partitioning requirements.
+     For more information, see :ref:`partition-data-to-enable-joins`.
 
 In either case, when setting ``KEY`` you must be sure that *both* of the following conditions are true:
 
@@ -1437,3 +1552,5 @@ Example:
       WITH (KAFKA_TOPIC='users-with-proper-key',
             VALUE_FORMAT='JSON',
             KEY='userid_string');
+
+For more information, see :ref:`partition-data-to-enable-joins`.

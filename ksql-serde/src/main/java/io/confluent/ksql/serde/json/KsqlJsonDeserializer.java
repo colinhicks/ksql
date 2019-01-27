@@ -1,23 +1,23 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 
 package io.confluent.ksql.serde.json;
 
 import com.google.gson.Gson;
+import io.confluent.common.logging.StructuredLogger;
 import io.confluent.ksql.GenericRow;
+import io.confluent.ksql.processing.log.ProcessingLogMessageFactory;
 import io.confluent.ksql.serde.util.SerdeUtils;
 import io.confluent.ksql.util.KsqlException;
 import io.confluent.ksql.util.SchemaUtil;
@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.connect.data.Field;
@@ -37,17 +38,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class KsqlJsonDeserializer implements Deserializer<GenericRow> {
-  private static final Logger LOG = LoggerFactory.getLogger(KsqlJsonSerializer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KsqlJsonDeserializer.class);
 
   private final Schema schema;
   private final JsonConverter jsonConverter;
+  private final StructuredLogger recordLogger;
 
   private final Gson gson;
 
-  /**
-   * Default constructor needed by Kafka
-   */
-  public KsqlJsonDeserializer(final Schema schema, final boolean isInternal) {
+  public KsqlJsonDeserializer(
+      final Schema schema,
+      final boolean isInternal,
+      final StructuredLogger recordLogger) {
     gson = new Gson();
     // If this is a Deserializer for an internal topic in the streams app
     if (isInternal) {
@@ -57,6 +59,7 @@ public class KsqlJsonDeserializer implements Deserializer<GenericRow> {
     }
     jsonConverter = new JsonConverter();
     jsonConverter.configure(Collections.singletonMap("schemas.enable", false), false);
+    this.recordLogger = recordLogger;
   }
 
   @Override
@@ -72,6 +75,8 @@ public class KsqlJsonDeserializer implements Deserializer<GenericRow> {
       }
       return row;
     } catch (final Exception e) {
+      recordLogger.error(
+          ProcessingLogMessageFactory.deserializationErrorMsg(e, Optional.ofNullable(bytes)));
       throw new SerializationException(
           "KsqlJsonDeserializer failed to deserialize data for topic: " + topic, e);
     }

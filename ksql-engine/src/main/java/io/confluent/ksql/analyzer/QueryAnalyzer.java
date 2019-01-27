@@ -1,22 +1,19 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 
 package io.confluent.ksql.analyzer;
 
-import io.confluent.ksql.function.FunctionRegistry;
 import io.confluent.ksql.metastore.MetaStore;
 import io.confluent.ksql.parser.tree.Expression;
 import io.confluent.ksql.parser.tree.ExpressionTreeRewriter;
@@ -34,14 +31,10 @@ import java.util.stream.Collectors;
 
 public class QueryAnalyzer {
   private final MetaStore metaStore;
-  private final FunctionRegistry functionRegistry;
   private final KsqlConfig config;
 
-  public QueryAnalyzer(final MetaStore metaStore,
-                       final FunctionRegistry functionRegistry,
-                       final KsqlConfig config) {
+  public QueryAnalyzer(final MetaStore metaStore, final KsqlConfig config) {
     this.metaStore = Objects.requireNonNull(metaStore, "metaStore");
-    this.functionRegistry = Objects.requireNonNull(functionRegistry, "functionRegistry");
     this.config = Objects.requireNonNull(config, "config");
   }
 
@@ -55,9 +48,9 @@ public class QueryAnalyzer {
   public AggregateAnalysis analyzeAggregate(final Query query, final Analysis analysis) {
     final AggregateAnalysis aggregateAnalysis = new AggregateAnalysis();
     final AggregateAnalyzer aggregateAnalyzer = new
-        AggregateAnalyzer(aggregateAnalysis, analysis, functionRegistry);
+        AggregateAnalyzer(aggregateAnalysis, analysis, metaStore);
     final AggregateExpressionRewriter aggregateExpressionRewriter =
-        new AggregateExpressionRewriter(functionRegistry);
+        new AggregateExpressionRewriter(metaStore);
 
     processSelectExpressions(
         analysis,

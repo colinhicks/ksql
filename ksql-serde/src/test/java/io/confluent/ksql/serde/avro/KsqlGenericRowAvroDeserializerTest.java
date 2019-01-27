@@ -1,18 +1,16 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 
 package io.confluent.ksql.serde.avro;
 
@@ -21,6 +19,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.common.logging.StructuredLogger;
 import io.confluent.connect.avro.AvroConverter;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -37,6 +36,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.confluent.ksql.util.KsqlConstants;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -45,7 +46,11 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 
 public class KsqlGenericRowAvroDeserializerTest {
@@ -68,6 +73,11 @@ public class KsqlGenericRowAvroDeserializerTest {
   private final Schema schema;
   private final org.apache.avro.Schema avroSchema;
   private final KsqlConfig ksqlConfig;
+  @Mock
+  private StructuredLogger recordLogger;
+
+  @Rule
+  public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
   public KsqlGenericRowAvroDeserializerTest() {
     final org.apache.avro.Schema.Parser parser = new org.apache.avro.Schema.Parser();
@@ -190,9 +200,12 @@ public class KsqlGenericRowAvroDeserializerTest {
     final byte[] bytes = kafkaAvroSerializer.serialize(topicName, avroRecord);
 
     final Deserializer<GenericRow> deserializer =
-        new KsqlAvroTopicSerDe().getGenericRowSerde(
-            schema, ksqlConfig, false,
-            () -> schemaRegistryClient).deserializer();
+        new KsqlAvroTopicSerDe(KsqlConstants.DEFAULT_AVRO_SCHEMA_FULL_NAME).getGenericRowSerde(
+            schema,
+            ksqlConfig,
+            false,
+            () -> schemaRegistryClient,
+            "loggerName").deserializer();
 
     return deserializer.deserialize(topicName, bytes);
   }
@@ -489,9 +502,12 @@ public class KsqlGenericRowAvroDeserializerTest {
         .build();
 
     final Deserializer<GenericRow> deserializer =
-        new KsqlAvroTopicSerDe().getGenericRowSerde(
-            ksqlRecordSchema, ksqlConfig, false,
-            () -> schemaRegistryClient).deserializer();
+        new KsqlAvroTopicSerDe(KsqlConstants.DEFAULT_AVRO_SCHEMA_FULL_NAME).getGenericRowSerde(
+            ksqlRecordSchema,
+            ksqlConfig,
+            false,
+            () -> schemaRegistryClient,
+            "loggerName").deserializer();
 
     final GenericRow row = deserializer.deserialize("topic", bytes);
 

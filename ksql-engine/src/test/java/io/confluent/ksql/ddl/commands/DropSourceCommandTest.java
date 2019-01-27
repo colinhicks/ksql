@@ -1,17 +1,15 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.ksql.ddl.commands;
@@ -26,14 +24,15 @@ import io.confluent.ksql.metastore.MetaStore;
 import io.confluent.ksql.metastore.StructuredDataSource;
 import io.confluent.ksql.parser.tree.DropStream;
 import io.confluent.ksql.parser.tree.QualifiedName;
-import io.confluent.ksql.util.FakeKafkaTopicClient;
+import io.confluent.ksql.services.FakeKafkaTopicClient;
 import io.confluent.ksql.util.KsqlException;
 import io.confluent.ksql.util.MetaStoreFixture;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
 public class DropSourceCommandTest {
-  MetaStore metaStore = MetaStoreFixture.getNewMetaStore(new InternalFunctionRegistry());
+  private final MetaStore metaStore = MetaStoreFixture
+      .getNewMetaStore(new InternalFunctionRegistry());
 
   @Test
   public void shouldSucceedOnMissingSourceWithIfExists() {
@@ -42,7 +41,7 @@ public class DropSourceCommandTest {
         .KSTREAM,
         new FakeKafkaTopicClient(),
         EasyMock.niceMock(SchemaRegistryClient.class), true);
-    final DdlCommandResult result = dropSourceCommand.run(metaStore, false);
+    final DdlCommandResult result = dropSourceCommand.run(metaStore);
     assertThat(result.getMessage(), equalTo("Source foo does not exist."));
   }
 
@@ -54,7 +53,7 @@ public class DropSourceCommandTest {
         new FakeKafkaTopicClient(),
         EasyMock.niceMock(SchemaRegistryClient.class), true);
     try {
-      dropSourceCommand.run(metaStore, false);
+      dropSourceCommand.run(metaStore);
       fail("Should raise a Ksql Exception if source not found");
     } catch (final KsqlException e) {}
   }

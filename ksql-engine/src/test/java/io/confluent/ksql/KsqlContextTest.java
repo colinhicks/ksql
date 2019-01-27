@@ -1,99 +1,208 @@
 /*
- * Copyright 2017 Confluent Inc.
+ * Copyright 2018 Confluent Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Confluent Community License; you may not use this file
+ * except in compliance with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.confluent.io/confluent-community-license
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 
 package io.confluent.ksql;
 
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import io.confluent.ksql.metastore.StructuredDataSource;
-import io.confluent.ksql.planner.PlanSourceExtractorVisitor;
-import io.confluent.ksql.planner.plan.OutputNode;
-import io.confluent.ksql.query.QueryId;
-import io.confluent.ksql.serde.DataSource;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import io.confluent.ksql.parser.KsqlParser.PreparedStatement;
+import io.confluent.ksql.services.ServiceContext;
 import io.confluent.ksql.util.KsqlConfig;
-import io.confluent.ksql.util.MetricsTestUtil;
+import io.confluent.ksql.util.KsqlException;
 import io.confluent.ksql.util.PersistentQueryMetadata;
-import io.confluent.ksql.util.QueryMetadata;
+import io.confluent.ksql.util.QueuedQueryMetadata;
 import java.util.Collections;
-import java.util.List;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreams.State;
+import java.util.Optional;
+import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
+@RunWith(MockitoJUnitRunner.class)
 public class KsqlContextTest {
 
-  private static final String statement1 = "CREATE STREAM orders (ordertime bigint, orderid bigint, "
-                                   + "itemid varchar, "
-                      + "orderunits double, arraycol array<double>, mapcol map<varchar, double>) "
-                      + "WITH (kafka_topic='ordertopic', value_format='JSON' , "
-                      + "key='orderid');\n";
-  private static final String statement2 = "CREATE STREAM BIGORDERS AS SELECT * FROM orders WHERE ORDERUNITS > 5;";
+  private static final KsqlConfig SOME_CONFIG = new KsqlConfig(Collections.emptyMap());
+  private static final ImmutableMap<String, Object> SOME_PROPERTIES = ImmutableMap
+      .of("overridden", "props");
+
+  @Rule
+  public final ExpectedException expectedException = ExpectedException.none();
+
+  @Mock
+  private ServiceContext serviceContext;
+  @Mock
+  private KsqlEngine ksqlEngine;
+  @Mock
+  private PersistentQueryMetadata persistentQuery;
+  @Mock
+  private QueuedQueryMetadata transientQuery;
+  @Mock
+  private PreparedStatement<?> statement0;
+  @Mock
+  private PreparedStatement<?> statement1;
+  private KsqlContext ksqlContext;
+
+  @Before
+  public void setUp() {
+    ksqlContext = new KsqlContext(serviceContext, SOME_CONFIG, ksqlEngine);
+
+    when(ksqlEngine.parseStatements(any()))
+        .thenReturn(ImmutableList.of(statement0));
+
+  }
 
   @Test
-  public void shouldRunSimpleStatements() {
-    final KsqlConfig ksqlConfig = new KsqlConfig(Collections.emptyMap());
-    final KsqlEngine ksqlEngine = mock(KsqlEngine.class);
-    expect(ksqlEngine.execute(statement1, ksqlConfig, Collections.emptyMap()))
-        .andReturn
-        (Collections.emptyList());
-    expect(ksqlEngine.execute(statement2, ksqlConfig, Collections.emptyMap()))
-        .andReturn(getQueryMetadata(new QueryId("CSAS_BIGORDERS"), DataSource.DataSourceType.KSTREAM));
-    replay(ksqlEngine);
+  public void shouldParseStatements() {
+    // When:
+    ksqlContext.sql("Some SQL", SOME_PROPERTIES);
 
-    final KsqlContext ksqlContext = new KsqlContext(ksqlConfig, ksqlEngine);
-    ksqlContext.sql(statement1);
-    ksqlContext.sql(statement2);
-
-    verify(ksqlEngine);
+    // Then:
+    verify(ksqlEngine).parseStatements("Some SQL");
   }
 
-  @SuppressWarnings("unchecked")
-  private static List<QueryMetadata> getQueryMetadata(final QueryId queryid, final DataSource.DataSourceType type) {
-    final KafkaStreams queryStreams = mock(KafkaStreams.class);
-    queryStreams.start();
-    expectLastCall();
-    queryStreams.setStateListener(anyObject());
-    expect(queryStreams.state()).andReturn(State.RUNNING);
+  @Test
+  public void shouldTryExecuteStatementsReturnedByParser() {
+    // Given:
+    when(ksqlEngine.parseStatements(any()))
+        .thenReturn(ImmutableList.of(statement0, statement1));
 
-    final OutputNode outputNode = mock(OutputNode.class);
-    expect(outputNode.accept(anyObject(PlanSourceExtractorVisitor.class), anyObject())).andReturn(null);
-    final StructuredDataSource structuredDataSource = mock(StructuredDataSource.class);
-    expect(structuredDataSource.getName()).andReturn("");
-    replay(structuredDataSource, outputNode, queryStreams);
+    // When:
+    ksqlContext.sql("Some SQL", SOME_PROPERTIES);
 
-    final PersistentQueryMetadata persistentQueryMetadata = new PersistentQueryMetadata(queryid.toString(),
-                                                                                   queryStreams,
-                                                                                   outputNode,
-                                                                                  structuredDataSource,
-                                                                                  "",
-                                                                                  queryid,
-                                                                                  type,
-                                                                                  "KSQL_query_" + queryid,
-                                                                                  null,
-                                                                                  null,
-                                                                                  null,
-                                                                                  null);
-
-    return Collections.singletonList(persistentQueryMetadata);
+    // Then:
+    verify(ksqlEngine)
+        .tryExecute(ImmutableList.of(statement0, statement1), SOME_CONFIG, SOME_PROPERTIES);
   }
 
+  @Test
+  public void shouldExecuteEachStatementReturnedByParser() {
+    // Given:
+    when(ksqlEngine.parseStatements(any()))
+        .thenReturn(ImmutableList.of(statement0, statement1));
+
+    // When:
+    ksqlContext.sql("Some SQL", SOME_PROPERTIES);
+
+    // Then:
+    final InOrder inOrder = inOrder(ksqlEngine);
+    inOrder.verify(ksqlEngine).execute(statement0, SOME_CONFIG, SOME_PROPERTIES);
+    inOrder.verify(ksqlEngine).execute(statement1, SOME_CONFIG, SOME_PROPERTIES);
+  }
+
+  @Test
+  public void shouldThrowIfParseFails() {
+    // Given:
+    when(ksqlEngine.parseStatements(any()))
+        .thenThrow(new KsqlException("Bad tings happen"));
+
+    // Expect
+    expectedException.expect(KsqlException.class);
+    expectedException.expectMessage("Bad tings happen");
+
+    // When:
+    ksqlContext.sql("Some SQL", SOME_PROPERTIES);
+  }
+
+  @Test
+  public void shouldThrowIfTryExecuteThrows() {
+    // Given:
+    when(ksqlEngine.tryExecute(any(), any(), any()))
+        .thenThrow(new KsqlException("Bad tings happen"));
+
+    // Expect
+    expectedException.expect(KsqlException.class);
+    expectedException.expectMessage("Bad tings happen");
+
+    // When:
+    ksqlContext.sql("Some SQL", SOME_PROPERTIES);
+  }
+
+  @Test
+  public void shouldThrowIfExecuteThrows() {
+    // Given:
+    when(ksqlEngine.execute(any(), any(), any()))
+        .thenThrow(new KsqlException("Bad tings happen"));
+
+    // Expect
+    expectedException.expect(KsqlException.class);
+    expectedException.expectMessage("Bad tings happen");
+
+    // When:
+    ksqlContext.sql("Some SQL", SOME_PROPERTIES);
+  }
+
+  @Test
+  public void shouldNotExecuteAnyStatementsIfTryExecuteThrows() {
+    // Given:
+    when(ksqlEngine.tryExecute(any(), any(), any()))
+        .thenThrow(new KsqlException("Bad tings happen"));
+
+    // When:
+    try {
+      ksqlContext.sql("Some SQL", SOME_PROPERTIES);
+    } catch (final KsqlException e) {
+      // expected
+    }
+
+    // Then:
+    verify(ksqlEngine, never()).execute(any(), any(), any());
+  }
+
+  @Test
+  public void shouldStartPersistentQueries() {
+    // Given:
+    when(ksqlEngine.execute(any(), any(), any()))
+        .thenReturn(Optional.of(persistentQuery));
+
+    // When:
+    ksqlContext.sql("Some SQL", SOME_PROPERTIES);
+
+    // Then:
+    verify(persistentQuery).start();
+  }
+
+  @Test
+  public void shouldNotBlowUpOnSqlThatDoesNotResultInPersistentQueries() {
+    // Given:
+    when(ksqlEngine.execute(any(), any(), any()))
+        .thenReturn(Optional.of(transientQuery));
+
+    // When:
+    ksqlContext.sql("Some SQL", SOME_PROPERTIES);
+
+    // Then:
+    // Did not blow up.
+  }
+
+  @Test
+  public void shouldCloseEngineBeforeServiceContextOnClose() {
+    // When:
+    ksqlContext.close();
+
+    // Then:
+    final InOrder inOrder = inOrder(ksqlEngine, serviceContext);
+    inOrder.verify(ksqlEngine).close();
+    inOrder.verify(serviceContext).close();
+  }
 }
